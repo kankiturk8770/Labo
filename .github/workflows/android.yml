@@ -1,0 +1,65 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Run signer contract unit tests
+        working-directory: android
+        run: gradle :app:testDebugUnitTest --no-daemon
+
+      - name: Rename APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/edge-vpn-${GITHUB_REF_NAME//\//-}.apk"
+          ls -la dist
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-vpn-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+      - name: Publish rolling release (stable download link)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-build-${{ github.ref_name }}
+          name: "Edge VPN APK (${{ github.ref_name }})"
+          body: |
+            Automatically built debug APK for branch `${{ github.ref_name }}`.
+            Commit: ${{ github.sha }}
+          files: dist/*.apk
+          make_latest: false
