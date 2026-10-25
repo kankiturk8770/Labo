@@ -23,18 +23,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          # Install nothing extra here; the obsolete "tools" package the
-          # action installs by default no longer exists and fails the job.
-          packages: ""
-          cmdline-tools-version: "16.0"
-
+      # ubuntu-latest ships a preinstalled Android SDK at $ANDROID_HOME with
+      # cmdline-tools/latest. Drive its sdkmanager directly instead of the
+      # setup-android action (which tried to install the obsolete "tools"
+      # package and a nonexistent cmdline-tools zip).
       - name: Install required SDK packages
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
