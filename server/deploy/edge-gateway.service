@@ -1,0 +1,33 @@
+[Unit]
+Description=Edge Gateway data plane
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=edge-gateway
+Group=edge-gateway
+WorkingDirectory=/opt/edge-gateway
+EnvironmentFile=/etc/edge-gateway/edge-gateway.env
+ExecStart=/opt/edge-gateway/edge-gateway
+Restart=on-failure
+RestartSec=3s
+# Panel allows shutdown timeout up to 300s.
+TimeoutStopSec=310s
+LimitNOFILE=65536
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+/var/lib/edge-panel/audit.jsonl {
+    daily
+    rotate 14
+    size 10M
+    compress
+    missingok
+    notifempty
+    create 0600 root root
+}

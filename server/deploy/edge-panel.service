@@ -1,0 +1,28 @@
+[Unit]
+Description=Edge Gateway management panel (loopback only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/edge-gateway/panel
+ExecStart=/usr/bin/python3 /opt/edge-gateway/panel/server.py --host 127.0.0.1 --port 9090
+Restart=on-failure
+RestartSec=3s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/etc/edge-gateway /var/lib/edge-panel
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Root is required for only the fixed unit, runuser checks, and managed files.
+# The web interface never runs arbitrary commands or accepts shell snippets.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,32 @@
+name: Gateway and panel checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go test -race -v ./...
+      - run: go vet ./...
+      - run: python3 -m unittest discover -s tests -v
+      - run: |
+          go build -buildvcs=false -o /tmp/edge-current .
+          go build -buildvcs=false -o /tmp/edge-original ./original
+          python3 tests/integration_gateway.py /tmp/edge-original /tmp/edge-current
+      - run: bash -n install.sh bootstrap.sh
+  install-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo bash install.sh
+      - run: |
+          systemctl is-active edge-panel
+          curl --fail http://127.0.0.1:9090/ >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9090/api/state)" = 401
+      - if: always()
+        run: sudo journalctl -u edge-panel -n 100 --no-pager
