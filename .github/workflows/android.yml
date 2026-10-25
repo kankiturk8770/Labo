@@ -25,6 +25,16 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Install nothing extra here; the obsolete "tools" package the
+          # action installs by default no longer exists and fails the job.
+          packages: ""
+          cmdline-tools-version: "16.0"
+
+      - name: Install required SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
