@@ -1,0 +1,11 @@
+# Binaries
+klink-server
+klink-client
+*.exe
+*.out
+
+# Database & Runtime
+*.db
+*.db-journal
+*.db-wal
+.env
