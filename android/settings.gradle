@@ -10,8 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        flatDir { dirs 'app/libs' }
     }
 }
 
-rootProject.name = "EdgeVPN"
+rootProject.name = "KlinkVPN"
 include(":app")

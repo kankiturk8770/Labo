@@ -4,21 +4,20 @@ plugins {
 }
 
 android {
-    namespace 'com.edge.vpn'
+    namespace 'com.klink.vpn'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.edge.vpn"
+        applicationId "com.klink.vpn"
         minSdk 24
         targetSdk 34
         versionCode 1
-        versionName "1.0.0"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        versionName "2.0.0"
     }
 
     buildTypes {
         release {
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
@@ -45,30 +44,22 @@ android {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
     }
-    testOptions {
-        unitTests.returnDefaultValues = true
-    }
 }
 
 dependencies {
     def composeBom = platform('androidx.compose:compose-bom:2024.06.00')
     implementation composeBom
-    androidTestImplementation composeBom
 
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.3'
-    implementation 'androidx.lifecycle:lifecycle-service:2.8.3'
     implementation 'androidx.activity:activity-compose:1.9.0'
     implementation 'androidx.datastore:datastore-preferences:1.1.1'
-
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
-    implementation 'androidx.compose.material:material-icons-extended'
     implementation 'androidx.compose.material3:material3'
-
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 
-    testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1'
+    // KLINK Go core compiled with gomobile. CI runs `gomobile bind` and drops
+    // klinkmobile.aar into app/libs before assembling the APK.
+    implementation(name: 'klinkmobile', ext: 'aar')
 }

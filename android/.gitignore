@@ -1,4 +1,3 @@
-# Android / Gradle
 *.iml
 .gradle/
 local.properties
@@ -9,5 +8,7 @@ captures/
 .cxx/
 *.apk
 *.aab
-# Gradle wrapper jar is generated via `gradle wrapper`
 gradle/wrapper/gradle-wrapper.jar
+# gomobile output (built in CI, dropped into app/libs)
+app/libs/*.aar
+app/libs/*.jar

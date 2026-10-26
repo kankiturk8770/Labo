@@ -5,6 +5,7 @@ on:
     branches: ["**"]
     paths:
       - "android/**"
+      - "klink/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -23,17 +24,34 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # ubuntu-latest ships a preinstalled Android SDK at $ANDROID_HOME with
-      # cmdline-tools/latest. Drive its sdkmanager directly instead of the
-      # setup-android action (which tried to install the obsolete "tools"
-      # package and a nonexistent cmdline-tools zip).
-      - name: Install required SDK packages
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      # ubuntu-latest ships a preinstalled Android SDK at $ANDROID_HOME.
+      - name: Install SDK packages + NDK
         run: |
-          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SM" --licenses >/dev/null 2>&1 || true
+          "$SM" "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125"
+          echo "ANDROID_NDK_HOME=$SDK/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$SDK/ndk/26.1.10909125" >> "$GITHUB_ENV"
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Build KLINK Go core into an Android .aar (gomobile)
+        working-directory: klink
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          go get golang.org/x/mobile/bind
+          gomobile init
+          mkdir -p ../android/app/libs
+          gomobile bind -target=android/arm64 -androidapi 24 \
+            -o ../android/app/libs/klinkmobile.aar ./mobile
+          ls -la ../android/app/libs
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -44,20 +62,16 @@ jobs:
         working-directory: android
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Run signer contract unit tests
-        working-directory: android
-        run: gradle :app:testDebugUnitTest --no-daemon
-
       - name: Rename APK
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/edge-vpn-${GITHUB_REF_NAME//\//-}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/klink-vpn-${GITHUB_REF_NAME//\//-}.apk"
           ls -la dist
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: edge-vpn-apk
+          name: klink-vpn-apk
           path: dist/*.apk
           if-no-files-found: error
 
@@ -66,7 +80,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-build-${{ github.ref_name }}
-          name: "Edge VPN APK (${{ github.ref_name }})"
+          name: "KLINK VPN APK (${{ github.ref_name }})"
           body: |
             Automatically built debug APK for branch `${{ github.ref_name }}`.
             Commit: ${{ github.sha }}

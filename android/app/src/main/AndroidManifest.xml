@@ -12,14 +12,14 @@
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.EdgeVPN"
+        android:theme="@style/Theme.KlinkVPN"
         android:usesCleartextTraffic="false">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-            android:theme="@style/Theme.EdgeVPN">
+            android:theme="@style/Theme.KlinkVPN">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -27,13 +27,13 @@
         </activity>
 
         <service
-            android:name=".EdgeVpnService"
+            android:name=".KlinkVpnService"
             android:exported="false"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Authenticated edge tunnel (VpnService)" />
+                android:value="KLINK anti-censorship tunnel (VpnService)" />
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>

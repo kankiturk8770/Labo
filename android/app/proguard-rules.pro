@@ -1,5 +1,4 @@
-# OkHttp / Okio
--dontwarn okhttp3.**
--dontwarn okio.**
--dontwarn org.conscrypt.**
--keep class com.edge.vpn.** { *; }
+# Keep gomobile-generated KLINK core
+-keep class klinkmobile.** { *; }
+-keep class go.** { *; }
+-keep class com.klink.vpn.** { *; }

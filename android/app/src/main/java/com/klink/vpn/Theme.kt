@@ -1,4 +1,4 @@
-package com.edge.vpn
+package com.klink.vpn
 
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -11,11 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val LightColors = lightColorScheme(primary = Color(0xFF1565C0))
-private val DarkColors = darkColorScheme(primary = Color(0xFF90CAF9))
+private val LightColors = lightColorScheme(primary = Color(0xFF00695C))
+private val DarkColors = darkColorScheme(primary = Color(0xFF4DB6AC))
 
 @Composable
-fun EdgeTheme(content: @Composable () -> Unit) {
+fun KlinkTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
     val colors = when {
