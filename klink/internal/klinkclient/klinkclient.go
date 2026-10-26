@@ -174,7 +174,7 @@ func (c *Client) dialTunnel() (net.Conn, error) {
 		raw.Close()
 		return nil, err
 	}
-	u.HandshakeState.Hello.SessionId = authtoken.Make(c.mkey, time.Now().Unix())
+	u.HandshakeState.Hello.SessionId = authtoken.Make(c.mkey)
 	u.HandshakeState.Hello.Raw = nil
 	if err := u.Handshake(); err != nil {
 		raw.Close()

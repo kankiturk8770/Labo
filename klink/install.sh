@@ -63,8 +63,15 @@ chmod +x /opt/klink/klink-server /opt/klink/klink-client
 echo "[5/6] Configuring UFW Firewall..."
 ufw allow 22/tcp
 ufw allow ${TCP_PORT}/tcp
-ufw allow ${PANEL_PORT}/tcp
 ufw allow 50000:60000/udp
+# The admin panel is NOT exposed to the internet by default. Reach it over an
+# SSH tunnel (see the final instructions). It is also protected by a password,
+# but keeping the port closed is the safer default. To expose it anyway (still
+# behind the password), re-run with KLINK_PANEL_PUBLIC=true.
+if [ "${KLINK_PANEL_PUBLIC:-false}" = "true" ]; then
+  echo " -> Exposing panel port ${PANEL_PORT} publicly (password-protected)."
+  ufw allow ${PANEL_PORT}/tcp
+fi
 ufw --force enable
 
 echo "[6/6] Creating and starting systemd service (klink.service)..."
@@ -99,10 +106,25 @@ systemctl restart klink.service
 
 SERVER_IP=$(curl -s https://api.ipify.org || hostname -I | awk '{print $1}')
 
+# Give the service a moment to generate the admin password on first boot.
+sleep 2
+PANEL_PASS="(see /opt/klink/panel-password.txt)"
+if [ -f /opt/klink/panel-password.txt ]; then
+  PANEL_PASS=$(cat /opt/klink/panel-password.txt)
+fi
+
 echo "============================================================"
 echo " ✅ KLINK v2 Installed and Started Successfully!"
 echo "------------------------------------------------------------"
-echo " 🌐 Full Control Web Panel : https://${SERVER_IP}:${PANEL_PORT}"
+echo " 🔐 Panel login           : user 'admin'  /  password: ${PANEL_PASS}"
+echo " 🔑 Password file          : /opt/klink/panel-password.txt"
+echo ""
+echo " The panel is NOT open to the internet. Reach it from your computer"
+echo " over an SSH tunnel, then open the local URL:"
+echo "   ssh -L ${PANEL_PORT}:127.0.0.1:${PANEL_PORT} root@${SERVER_IP}"
+echo "   then browse to:  https://127.0.0.1:${PANEL_PORT}"
+echo " (self-signed cert: accept the browser warning once)"
+echo ""
 echo " 🎭 Default Masquerade     : ${MIMIC_DOMAIN} (Changeable in Panel)"
 echo " 📄 Commands Cheat-Sheet   : /opt/klink/COMMANDS.txt"
 echo "============================================================"

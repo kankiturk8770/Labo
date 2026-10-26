@@ -18,10 +18,9 @@ import (
 )
 
 func main() {
-	secretPhrase := os.Getenv("KLINK_SECRET")
-	if secretPhrase == "" {
-		secretPhrase = "klink-ultra-secret-master-key-2026"
-	}
+	// Never fall back to a hardcoded key: if KLINK_SECRET is unset, generate and
+	// persist a random one so the master key is not world-known.
+	secretPhrase := resolveServerSecret()
 	masterKey := sha256.Sum256([]byte(secretPhrase))
 
 	defaultDomain := os.Getenv("KLINK_MIMIC_DOMAIN")
@@ -234,13 +233,16 @@ func startAdminPanel(sm *session.SessionManager, obf *obfuscation.Obfuscator, ma
 		fmt.Fprint(w, panelHTML)
 	})
 
+	// Require admin authentication on everything except public /sub/ links.
+	handler := requirePanelAuth(mux, resolvePanelPassword(panelCertDir()))
+
 	// Serve the panel over HTTPS using a persisted self-signed certificate
 	// (auto-generated on first run). Set KLINK_PANEL_INSECURE=true to force
 	// plain HTTP instead. If the certificate cannot be prepared, fall back to
 	// HTTP rather than leaving the panel unreachable.
 	if os.Getenv("KLINK_PANEL_INSECURE") == "true" {
 		log.Printf("[KLINK-PANEL] Full Control Web UI running on http://0.0.0.0%s (insecure mode)", listenAddr)
-		_ = http.ListenAndServe(listenAddr, mux)
+		_ = http.ListenAndServe(listenAddr, handler)
 		return
 	}
 
@@ -248,13 +250,13 @@ func startAdminPanel(sm *session.SessionManager, obf *obfuscation.Obfuscator, ma
 	if err != nil {
 		log.Printf("[KLINK-PANEL] TLS setup failed (%v); falling back to HTTP", err)
 		log.Printf("[KLINK-PANEL] Full Control Web UI running on http://0.0.0.0%s", listenAddr)
-		_ = http.ListenAndServe(listenAddr, mux)
+		_ = http.ListenAndServe(listenAddr, handler)
 		return
 	}
 
 	srv := &http.Server{
 		Addr:      listenAddr,
-		Handler:   mux,
+		Handler:   handler,
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 	log.Printf("[KLINK-PANEL] Full Control Web UI running on https://0.0.0.0%s (self-signed TLS)", listenAddr)

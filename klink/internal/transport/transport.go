@@ -26,6 +26,8 @@ type Engine struct {
 	TLSCert   tls.Certificate
 	streamsMu sync.Mutex
 	streams   map[uint32]net.Conn
+	seenMu    sync.Mutex
+	seen      map[string]int64 // anti-replay cache: token -> expiry unix
 }
 
 func NewEngine(sm *session.SessionManager, obf *obfuscation.Obfuscator, tcpAddr, udpAddr string) *Engine {

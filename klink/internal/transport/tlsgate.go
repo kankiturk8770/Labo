@@ -64,6 +64,29 @@ func peekClientHello(conn net.Conn) (sessionID, raw []byte, err error) {
 	return sessionID, raw, nil
 }
 
+// seenToken records a token and reports whether it was already used (a replay).
+func (e *Engine) seenToken(sid []byte) bool {
+	key := authtoken.ReplayKey(sid)
+	now := time.Now().Unix()
+	ttl := int64(authtoken.Window/time.Second) + 5
+
+	e.seenMu.Lock()
+	defer e.seenMu.Unlock()
+	if e.seen == nil {
+		e.seen = make(map[string]int64)
+	}
+	for k, exp := range e.seen {
+		if exp < now {
+			delete(e.seen, k)
+		}
+	}
+	if _, used := e.seen[key]; used {
+		return true
+	}
+	e.seen[key] = now + ttl
+	return false
+}
+
 // gateTLS inspects an incoming connection. If it carries a valid KLINK auth
 // token in its ClientHello, it terminates a real TLS 1.3 session (the server
 // certificate is encrypted under TLS 1.3, so a passive observer cannot tell it
@@ -75,6 +98,11 @@ func (e *Engine) gateTLS(conn net.Conn) (net.Conn, []byte, bool) {
 	sid, raw, err := peekClientHello(conn)
 	_ = conn.SetReadDeadline(time.Time{})
 	if err != nil || !authtoken.Verify(e.MasterKey, sid, time.Now()) {
+		return conn, raw, false
+	}
+	// Anti-replay: a captured ClientHello replayed within the window is treated
+	// like any unauthenticated connection and diverted to the real decoy site.
+	if e.seenToken(sid) {
 		return conn, raw, false
 	}
 
