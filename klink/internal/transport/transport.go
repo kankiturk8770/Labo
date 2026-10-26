@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"klink/internal/crypto"
 	"klink/internal/mux"
 	"klink/internal/obfuscation"
 	"klink/internal/session"
@@ -222,7 +223,7 @@ func (e *Engine) startUDP() {
 }
 
 func (e *Engine) processDecryptedPacket(sess *session.UserSession, seq uint64, cipherPayload []byte, sendBack func([]byte)) {
-	plain, err := sess.Cipher.Decrypt(seq, cipherPayload, sess.SessionID[:])
+	plain, err := sess.Cipher.Decrypt(crypto.DirClientToServer, seq, cipherPayload, sess.SessionID[:])
 	if err != nil {
 		return
 	}
@@ -252,7 +253,6 @@ func (e *Engine) processDecryptedPacket(sess *session.UserSession, seq uint64, c
 			}()
 
 			rbuf := make([]byte, 16384)
-			var respSeq uint64 = seq + 1000000
 			for {
 				rn, err := remote.Read(rbuf)
 				if err != nil {
@@ -261,14 +261,17 @@ func (e *Engine) processDecryptedPacket(sess *session.UserSession, seq uint64, c
 					}
 					break
 				}
-				respSeq++
+				// One monotonic per-session counter for ALL server->client
+				// packets across every stream, so no two s2c packets ever reuse
+				// a nonce under this session's key.
+				respSeq := sess.NextTx()
 				_, _ = e.SessionMgr.ValidateAndMigrate(sess.SessionID, 0, int64(rn), nil)
 				outFrame := mux.EncodeFrame(&mux.Frame{
 					StreamID: streamID,
 					Cmd:      mux.CmdDATA,
 					Payload:  rbuf[:rn],
 				})
-				enc := sess.Cipher.Encrypt(respSeq, outFrame, sess.SessionID[:])
+				enc := sess.Cipher.Encrypt(crypto.DirServerToClient, respSeq, outFrame, sess.SessionID[:])
 				fullPkt := make([]byte, 24+len(enc))
 				copy(fullPkt[:16], sess.SessionID[:])
 				binary.BigEndian.PutUint64(fullPkt[16:24], respSeq)

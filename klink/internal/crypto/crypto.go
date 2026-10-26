@@ -81,23 +81,33 @@ func (cs *CipherState) CheckAndRekey() error {
 	return nil
 }
 
-func (cs *CipherState) Encrypt(seq uint64, plaintext, ad []byte) []byte {
+// Direction tags occupy the first nonce byte so the two traffic directions can
+// never share a (key, nonce) pair even when their sequence numbers coincide —
+// reusing a nonce under ChaCha20-Poly1305 would be catastrophic.
+const (
+	DirClientToServer byte = 0x00
+	DirServerToClient byte = 0x01
+)
+
+func (cs *CipherState) Encrypt(dir byte, seq uint64, plaintext, ad []byte) []byte {
 	cs.mu.Lock()
 	cs.txCount++
 	aead := cs.aead
 	cs.mu.Unlock()
 
 	var nonce [12]byte
+	nonce[0] = dir
 	binary.BigEndian.PutUint64(nonce[4:], seq)
 	return aead.Seal(nil, nonce[:], plaintext, ad)
 }
 
-func (cs *CipherState) Decrypt(seq uint64, ciphertext, ad []byte) ([]byte, error) {
+func (cs *CipherState) Decrypt(dir byte, seq uint64, ciphertext, ad []byte) ([]byte, error) {
 	cs.mu.RLock()
 	aead := cs.aead
 	cs.mu.RUnlock()
 
 	var nonce [12]byte
+	nonce[0] = dir
 	binary.BigEndian.PutUint64(nonce[4:], seq)
 	plain, err := aead.Open(nil, nonce[:], ciphertext, ad)
 	if err != nil {

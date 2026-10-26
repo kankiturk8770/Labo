@@ -241,7 +241,7 @@ func (c *Client) handleSocks(local net.Conn) {
 				continue
 			}
 			rSeq := binary.BigEndian.Uint64(rawPkt[16:24])
-			plain, err := c.cipher.Decrypt(rSeq, rawPkt[24:], c.sid[:])
+			plain, err := c.cipher.Decrypt(crypto.DirServerToClient, rSeq, rawPkt[24:], c.sid[:])
 			if err != nil {
 				continue
 			}
@@ -271,7 +271,7 @@ func (c *Client) handleSocks(local net.Conn) {
 func (c *Client) sendMuxFrame(remote net.Conn, f *mux.Frame) {
 	seq := atomic.AddUint64(&c.globalSeq, 1)
 	rawFrame := mux.EncodeFrame(f)
-	enc := c.cipher.Encrypt(seq, rawFrame, c.sid[:])
+	enc := c.cipher.Encrypt(crypto.DirClientToServer, seq, rawFrame, c.sid[:])
 
 	pkt := make([]byte, 24+len(enc))
 	copy(pkt[:16], c.sid[:])

@@ -75,7 +75,7 @@ fi
 ufw --force enable
 
 echo "[6/6] Creating and starting systemd service (klink.service)..."
-SECRET_KEY=$(openssl rand -hex 16)
+SECRET_KEY=$(openssl rand -hex 32)
 
 cat > /etc/systemd/system/klink.service <<EOF
 [Unit]

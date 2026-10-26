@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"klink/internal/crypto"
@@ -77,6 +78,14 @@ type UserSession struct {
 	IsConnected  bool
 	Cipher       *crypto.CipherState
 	Replay       *ReplayWindow
+	txSeq        uint64 // monotonic nonce counter for server->client packets
+}
+
+// NextTx returns the next server->client sequence number for this session. It
+// is a single monotonic counter across all of the session's streams, so no two
+// outbound packets ever reuse an AEAD nonce under the session key.
+func (u *UserSession) NextTx() uint64 {
+	return atomic.AddUint64(&u.txSeq, 1)
 }
 
 type SessionManager struct {
@@ -192,7 +201,7 @@ func (sm *SessionManager) CreateUser(username string, limitGB int64, daysValid i
 
 	var sid [16]byte
 	_, _ = rand.Read(sid[:])
-	tokenBytes := make([]byte, 12)
+	tokenBytes := make([]byte, 24)
 	_, _ = rand.Read(tokenBytes)
 	token := hex.EncodeToString(tokenBytes)
 
