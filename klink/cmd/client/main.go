@@ -15,10 +15,42 @@ import (
 	"sync/atomic"
 	"time"
 
+	"klink/internal/authtoken"
 	"klink/internal/crypto"
 	"klink/internal/mux"
 	"klink/internal/obfuscation"
+
+	utls "github.com/refraction-networking/utls"
 )
+
+// dialKlinkTLS opens a genuine, Chrome-fingerprinted TLS 1.3 connection to the
+// KLINK server. The per-connection auth token is hidden in the ClientHello's
+// legacy_session_id, so to any observer this is an ordinary browser opening an
+// HTTPS site with SNI = the mimic domain. The server's certificate is encrypted
+// under TLS 1.3 and the client does not verify it (the mimic site's identity is
+// not the trust boundary; the KLINK session key inside is).
+func dialKlinkTLS(serverAddr, sni string, mkey [32]byte) (net.Conn, error) {
+	raw, err := net.DialTimeout("tcp", serverAddr, 8*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	u := utls.UClient(
+		raw,
+		&utls.Config{ServerName: sni, InsecureSkipVerify: true},
+		utls.HelloChrome_Auto,
+	)
+	if err := u.BuildHandshakeState(); err != nil {
+		raw.Close()
+		return nil, err
+	}
+	u.HandshakeState.Hello.SessionId = authtoken.Make(mkey, time.Now().Unix())
+	u.HandshakeState.Hello.Raw = nil
+	if err := u.Handshake(); err != nil {
+		raw.Close()
+		return nil, err
+	}
+	return u, nil
+}
 
 var globalSeq uint64 = 1
 var streamCounter uint32 = 1
@@ -112,11 +144,11 @@ func main() {
 		if err != nil {
 			continue
 		}
-		go handleSocksConnection(clientConn, *serverAddr, sid, cipherState, obf)
+		go handleSocksConnection(clientConn, *serverAddr, *sniDomain, sid, mkey, cipherState, obf)
 	}
 }
 
-func handleSocksConnection(local net.Conn, serverAddr string, sid [16]byte, cs *crypto.CipherState, obf *obfuscation.Obfuscator) {
+func handleSocksConnection(local net.Conn, serverAddr, sni string, sid [16]byte, mkey [32]byte, cs *crypto.CipherState, obf *obfuscation.Obfuscator) {
 	defer local.Close()
 
 	buf := make([]byte, 512)
@@ -148,7 +180,7 @@ func handleSocksConnection(local net.Conn, serverAddr string, sid [16]byte, cs *
 
 	_, _ = local.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0})
 
-	remote, err := net.Dial("tcp", serverAddr)
+	remote, err := dialKlinkTLS(serverAddr, sni, mkey)
 	if err != nil {
 		return
 	}

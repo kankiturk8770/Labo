@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"io"
 	"log"
@@ -18,8 +19,13 @@ type Engine struct {
 	Obfuscator *obfuscation.Obfuscator
 	TCPAddr    string
 	UDPAddr    string
-	streamsMu  sync.Mutex
-	streams    map[uint32]net.Conn
+	// MasterKey and TLSCert back the genuine TLS handshake gate (tlsgate.go).
+	// They are set by main after NewEngine; the KLINK data/crypto/mux pipeline
+	// below is unchanged and runs inside the terminated TLS session.
+	MasterKey [32]byte
+	TLSCert   tls.Certificate
+	streamsMu sync.Mutex
+	streams   map[uint32]net.Conn
 }
 
 func NewEngine(sm *session.SessionManager, obf *obfuscation.Obfuscator, tcpAddr, udpAddr string) *Engine {
@@ -55,6 +61,18 @@ func (e *Engine) startTCP() error {
 }
 
 func (e *Engine) handleTCPConn(conn net.Conn) {
+	// Genuine TLS handshake gate: authenticated KLINK clients speak a real
+	// Chrome-fingerprinted TLS 1.3 handshake (token hidden in the ClientHello
+	// session id). Anything else — browsers, scanners, active probes — is
+	// diverted untouched to the real decoy site, which serves its own real
+	// certificate and content.
+	gated, raw, ok := e.gateTLS(conn)
+	if !ok {
+		e.Obfuscator.DivertToDomesticSite(conn, raw)
+		return
+	}
+	conn = gated
+
 	_ = conn.SetReadDeadline(time.Now().Add(8 * time.Second))
 	buf := make([]byte, 65535)
 	n, err := conn.Read(buf)

@@ -65,6 +65,22 @@ func main() {
 
 	engine := transport.NewEngine(sm, obf, "0.0.0.0:"+tcpPort, "0.0.0.0:"+udpPort)
 
+	// Back the genuine TLS handshake gate: the shared master key authenticates
+	// ClientHellos, and a self-signed certificate terminates TLS 1.3 for valid
+	// clients (the cert is encrypted under TLS 1.3, so it is not observable).
+	engine.MasterKey = masterKey
+	dataCertFile, dataKeyFile, certErr := ensurePanelCert(panelCertDir())
+	if certErr == nil {
+		var cert tls.Certificate
+		cert, certErr = tls.LoadX509KeyPair(dataCertFile, dataKeyFile)
+		if certErr == nil {
+			engine.TLSCert = cert
+		}
+	}
+	if certErr != nil {
+		log.Fatalf("data-plane TLS certificate error: %v", certErr)
+	}
+
 	go startAdminPanel(sm, obf, masterKey, ":"+panelPort, tcpPort)
 
 	if err := engine.Start(); err != nil {
