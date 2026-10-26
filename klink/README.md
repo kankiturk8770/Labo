@@ -15,3 +15,21 @@ git clone https://github.com/kankiturk8770/Labo.git && cd Labo/klink && sudo bas
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kankiturk8770/Labo/ccr-dc42377d-5ky57p/klink/install.sh | sudo KLINK_REPO_URL="https://github.com/kankiturk8770/Labo.git" bash
 ```
+
+---
+
+## امنیت پنل (HTTPS)
+
+پنل مدیریت روی **HTTPS** اجرا می‌شود. سرور در اولین اجرا یک گواهی TLS
+«خودامضا» (self-signed) می‌سازد و در کنار دیتابیس ذخیره می‌کند
+(`panel-cert.pem` / `panel-key.pem`) و دفعات بعد همان را استفاده می‌کند. گواهی
+برای `localhost` و همهٔ آی‌پی‌های محلی سرور معتبر است، پس پنل را می‌توان با
+آدرس `https://SERVER_IP:8443` باز کرد.
+
+چون گواهی خودامضاست، مرورگر یک‌بار هشدار «اتصال خصوصی نیست» نشان می‌دهد؛ این
+طبیعی است (اتصال رمزنگاری‌شده است، فقط توسط یک CA عمومی تأیید نشده). روی
+Advanced → Proceed بزنید. کلاینت KLINK نیز هنگام گرفتن لینک سابسکریپشن همین
+گواهی خودامضا را می‌پذیرد.
+
+برای برگرداندن پنل به HTTP ساده (توصیه نمی‌شود):
+`KLINK_PANEL_INSECURE=true`

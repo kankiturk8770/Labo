@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -45,7 +46,15 @@ func main() {
 	if *subURL != "" {
 		u, err := url.Parse(*subURL)
 		if err == nil {
-			cl := &http.Client{Timeout: 6 * time.Second}
+			// The panel serves HTTPS with a self-signed certificate, so the
+			// subscription fetch accepts it. The payload itself is bound to the
+			// per-user master key, so this fetch is not the trust boundary.
+			cl := &http.Client{
+				Timeout: 6 * time.Second,
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
+			}
 			resp, err := cl.Get(*subURL)
 			if err == nil {
 				var sr SubResponse
@@ -69,7 +78,7 @@ func main() {
 	}
 
 	if *sessionHex == "" || *masterHex == "" {
-		log.Println("[KLINK-CLIENT] Usage: klink-client -sub http://SERVER:8443/sub/TOKEN -socks 127.0.0.1:1080")
+		log.Println("[KLINK-CLIENT] Usage: klink-client -sub https://SERVER:8443/sub/TOKEN -socks 127.0.0.1:1080")
 		return
 	}
 

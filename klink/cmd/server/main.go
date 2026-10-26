@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -217,8 +218,31 @@ func startAdminPanel(sm *session.SessionManager, obf *obfuscation.Obfuscator, ma
 		fmt.Fprint(w, panelHTML)
 	})
 
-	log.Printf("[KLINK-PANEL] Full Control Web UI running on http://0.0.0.0%s", listenAddr)
-	_ = http.ListenAndServe(listenAddr, mux)
+	// Serve the panel over HTTPS using a persisted self-signed certificate
+	// (auto-generated on first run). Set KLINK_PANEL_INSECURE=true to force
+	// plain HTTP instead. If the certificate cannot be prepared, fall back to
+	// HTTP rather than leaving the panel unreachable.
+	if os.Getenv("KLINK_PANEL_INSECURE") == "true" {
+		log.Printf("[KLINK-PANEL] Full Control Web UI running on http://0.0.0.0%s (insecure mode)", listenAddr)
+		_ = http.ListenAndServe(listenAddr, mux)
+		return
+	}
+
+	certFile, keyFile, err := ensurePanelCert(panelCertDir())
+	if err != nil {
+		log.Printf("[KLINK-PANEL] TLS setup failed (%v); falling back to HTTP", err)
+		log.Printf("[KLINK-PANEL] Full Control Web UI running on http://0.0.0.0%s", listenAddr)
+		_ = http.ListenAndServe(listenAddr, mux)
+		return
+	}
+
+	srv := &http.Server{
+		Addr:      listenAddr,
+		Handler:   mux,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	log.Printf("[KLINK-PANEL] Full Control Web UI running on https://0.0.0.0%s (self-signed TLS)", listenAddr)
+	_ = srv.ListenAndServeTLS(certFile, keyFile)
 }
 
 const panelHTML = `<!DOCTYPE html>

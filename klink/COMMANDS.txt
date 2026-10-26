@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/kankiturk8770/Labo/ccr-dc42377d-5ky
 
 ۲. آدرس ورود به پنل مدیریت تحت وب (کنترل کامل همه تنظیمات از پنل):
 --------------------------------------------------------------------
-http://SERVER_IP:8443
+https://SERVER_IP:8443
 
 امکانات داخل پنل وب (بدون نیاز به دست زدن به ترمینال یا ریستارت):
 - تغییر زنده دامنه نقاب و SNI (مثلاً تغییر آنی از www.anten.ir به www.aparat.com یا www.telewebion.com)
@@ -38,7 +38,7 @@ sudo systemctl restart klink
 --------------------------------------------------------------------
 کلاینت نسخه ۲ به گونه‌ای طراحی شده که کافی است لینک سابسکریپشن کاربر را به آن بدهید تا خودش نام سایت نقاب (آپارات/آنتن)، کلیدها و پورت‌ها را مستقیم از پنل بگیرد:
 
-./klink-client -sub "http://SERVER_IP:8443/sub/USER_TOKEN" -socks "127.0.0.1:1080"
+./klink-client -sub "https://SERVER_IP:8443/sub/USER_TOKEN" -socks "127.0.0.1:1080"
 
 یا اجرای دستی:
 ./klink-client -server "SERVER_IP:443" -session "SESSION_HEX" -key "MASTER_KEY_HEX" -sni "www.aparat.com" -socks "127.0.0.1:1080"

@@ -102,7 +102,7 @@ SERVER_IP=$(curl -s https://api.ipify.org || hostname -I | awk '{print $1}')
 echo "============================================================"
 echo " ✅ KLINK v2 Installed and Started Successfully!"
 echo "------------------------------------------------------------"
-echo " 🌐 Full Control Web Panel : http://${SERVER_IP}:${PANEL_PORT}"
+echo " 🌐 Full Control Web Panel : https://${SERVER_IP}:${PANEL_PORT}"
 echo " 🎭 Default Masquerade     : ${MIMIC_DOMAIN} (Changeable in Panel)"
 echo " 📄 Commands Cheat-Sheet   : /opt/klink/COMMANDS.txt"
 echo "============================================================"
