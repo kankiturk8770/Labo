@@ -216,7 +216,7 @@ func startAdminPanel(sm *session.SessionManager, obf *obfuscation.Obfuscator, ma
 			"username":         u.Username,
 			"enabled":          u.Enabled,
 			"session_id":       hex.EncodeToString(u.SessionID[:]),
-			"master_key":       hex.EncodeToString(masterKey[:]),
+			"master_key":       hex.EncodeToString(userKeySlice(session.DeriveUserKey(masterKey, u.SessionID))),
 			"sni_masquerade":   cfg.MimicDomain,
 			"fallback_target":  cfg.FallbackAddr,
 			"cert_fingerprint": cfg.CertInfo.Fingerprint,

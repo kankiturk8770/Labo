@@ -14,6 +14,9 @@ import (
 // panelUser is the fixed admin username; the password is generated/stored.
 const panelUser = "admin"
 
+// userKeySlice makes a [32]byte key sliceable for hex encoding inline.
+func userKeySlice(k [32]byte) []byte { return k[:] }
+
 // resolveServerSecret returns KLINK_SECRET, or a persisted random secret
 // generated on first run — never a hardcoded fallback key.
 func resolveServerSecret() string {

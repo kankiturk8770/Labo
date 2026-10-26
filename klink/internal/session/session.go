@@ -1,7 +1,9 @@
 package session
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +15,19 @@ import (
 	"klink/internal/obfuscation"
 	_ "modernc.org/sqlite"
 )
+
+// DeriveUserKey returns a per-user encryption key derived from the server
+// master key and the user's session id: HMAC-SHA256(master, session_id). Each
+// user therefore encrypts with a distinct key, so a leaked subscription link
+// exposes only that one user's traffic — not everyone's. The server recomputes
+// it on the fly from the session id in each packet header; nothing is stored.
+func DeriveUserKey(master [32]byte, sid [16]byte) [32]byte {
+	mac := hmac.New(sha256.New, master[:])
+	mac.Write(sid[:])
+	var out [32]byte
+	copy(out[:], mac.Sum(nil))
+	return out
+}
 
 type ReplayWindow struct {
 	mu      sync.Mutex
@@ -152,7 +167,7 @@ func (sm *SessionManager) loadFromDB() {
 			var sid [16]byte
 			b, _ := hex.DecodeString(sidHex)
 			copy(sid[:], b)
-			cipherState, _ := crypto.NewCipherState(sm.masterKey)
+			cipherState, _ := crypto.NewCipherState(DeriveUserKey(sm.masterKey, sid))
 			sess := &UserSession{
 				SessionID:    sid,
 				Username:     username,
@@ -193,7 +208,7 @@ func (sm *SessionManager) CreateUser(username string, limitGB int64, daysValid i
 		return nil, err
 	}
 
-	cipherState, _ := crypto.NewCipherState(sm.masterKey)
+	cipherState, _ := crypto.NewCipherState(DeriveUserKey(sm.masterKey, sid))
 	sess := &UserSession{
 		SessionID:    sid,
 		Username:     username,
