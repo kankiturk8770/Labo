@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"testing"
+	"time"
 )
 
 func testKeys(t *testing.T) (*pskKeys, *pskKeys) {
@@ -157,5 +158,16 @@ func TestReplayWindow(t *testing.T) {
 	}
 	if !r.accept(100000 - windowBits + 1) {
 		t.Fatal("oldest in-window counter rejected")
+	}
+}
+
+func TestParseURL(t *testing.T) {
+	k := "ab"
+	for len(k) < 64 {
+		k += "ab"
+	}
+	c, err := parseURL("mtun://" + k + "@de.example.com:4200?obfs=" + k + "&ip=10.77.0.2/16&mtu=1400&burst=200&delay=3#Germany%20%C2%B7%20microtun")
+	if err != nil || c.Server != "de.example.com:4200" || c.Key != k || c.ObfsKey != k || c.Address != "10.77.0.2/16" || c.MTU != 1400 || c.BurstMax != 200 || c.BurstDelay != duration(3*time.Millisecond) {
+		t.Fatalf("%+v %v", c, err)
 	}
 }

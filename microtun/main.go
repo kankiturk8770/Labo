@@ -25,6 +25,7 @@ func usage() {
 
   microtun server -c server.json
   microtun client -c client.json
+  microtun client -url 'mtun://KEY@HOST:PORT?obfs=…&ip=…' [-route-all=false]
   microtun gen -endpoint SERVER_IP:51820 [-clients 1] [-out .]
   microtun genkey
 `, version)
@@ -39,7 +40,18 @@ func main() {
 	case "server", "client":
 		fs := flag.NewFlagSet(os.Args[1], flag.ExitOnError)
 		path := fs.String("c", os.Args[1]+".json", "config file")
+		link := fs.String("url", "", "client: an mtun:// link from the Kanki panel instead of -c")
+		routeAll := fs.Bool("route-all", true, "client with -url: send all IPv4 traffic through the tunnel")
 		_ = fs.Parse(os.Args[2:])
+		if *link != "" {
+			cfg, err := parseURL(*link)
+			if err != nil {
+				log.Fatal(err)
+			}
+			cfg.RouteAll = *routeAll
+			runClient(cfg)
+			return
+		}
 		runMode(os.Args[1], *path)
 	case "gen":
 		gen(os.Args[2:])
@@ -52,8 +64,15 @@ func main() {
 	}
 }
 
+func runClient(cfg *clientConfig) {
+	c, err := newClient(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	runWith(c.run)
+}
+
 func runMode(mode, path string) {
-	var undo cleanup
 	var runner func(*cleanup) error
 	if mode == "server" {
 		var cfg serverConfig
@@ -76,7 +95,11 @@ func runMode(mode, path string) {
 		}
 		runner = c.run
 	}
+	runWith(runner)
+}
 
+func runWith(runner func(*cleanup) error) {
+	var undo cleanup
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	errc := make(chan error, 1)

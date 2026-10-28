@@ -45,6 +45,13 @@ ping 10.66.66.1             # سرور داخل تونل
 curl ifconfig.me            # باید IP سرور رو نشون بده (route_all روشنه)
 ```
 
+**با لینک پنل کانکی:** در پنل، بخش microtun › «لینک تست»، کاربر رو انتخاب کن و لینک رو کپی کن:
+
+```bash
+sudo microtun client -url 'mtun://…'                    # کل ترافیک از تونل
+sudo microtun client -url 'mtun://…' -route-all=false   # فقط شبکهٔ تونل
+```
+
 اجرای دستی بدون systemd: `sudo microtun client -c client1.json`. خاموش کردنش (Ctrl+C) مسیرها رو برمی‌گردونه.
 
 ## تنظیمات مهم
