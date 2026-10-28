@@ -8,7 +8,7 @@ import (
 )
 
 // parseURL reads an mtun:// link as the Kanki panel makes it:
-// mtun://KEY@host:port?obfs=HEX&ip=10.77.0.2/16&mtu=1420&burst=300&delay=2#name
+// mtun://KEY@host:port?obfs=HEX&ip=10.79.0.2/16&mtu=1420&burst=300&delay=2#name
 func parseURL(s string) (*clientConfig, error) {
 	u, err := url.Parse(s)
 	if err != nil || u.Scheme != "mtun" || u.User == nil || u.Host == "" {

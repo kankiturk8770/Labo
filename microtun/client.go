@@ -3,11 +3,14 @@ package main
 import (
 	"crypto/cipher"
 	"crypto/ecdh"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
 	"net/netip"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +29,11 @@ type client struct {
 	previous atomic.Pointer[session] // still accepted until it expires
 	lastRecv atomic.Int64            // unix nanos of the last authenticated packet
 	lastSend atomic.Int64
+
+	// this run's device id: the panel's server gives each device of a user its own
+	// address (and IPv6 when it has it); addr4/addr6 are what the interface has now
+	dev          uint64
+	addr4, addr6 netip.Addr
 
 	mu       sync.Mutex // guards the handshake in flight
 	hsEph    *ecdh.PrivateKey
@@ -48,7 +56,10 @@ func newClient(cfg *clientConfig) (*client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &client{cfg: cfg}
+	c := &client{cfg: cfg, dev: deviceID(cfg.Device, cfg.Key)}
+	if p, err := netip.ParsePrefix(cfg.Address); err == nil {
+		c.addr4 = p.Addr()
+	}
 	if c.obfs, err = newBlock(obfsKey); err != nil {
 		return nil, err
 	}
@@ -176,7 +187,7 @@ func (c *client) sendInit() {
 	}
 	c.lastTS = ts
 	c.hsEph, c.hsIdx, c.hsSent = eph, randIdx(), time.Now()
-	pkt := buildInit(c.obfs, c.keys, initMsg{eph: eph.PublicKey().Bytes(), ts: ts, idx: c.hsIdx})
+	pkt := buildInit(c.obfs, c.keys, initMsg{eph: eph.PublicKey().Bytes(), ts: ts, idx: c.hsIdx, dev: c.dev})
 	_, _ = c.conn.WriteToUDPAddrPort(pkt, *c.server.Load())
 }
 
@@ -212,7 +223,63 @@ func (c *client) handleResp(pkt []byte) {
 		log.Printf("connected to %s (handshake %s)", c.server.Load(), time.Since(c.hsSent).Round(time.Millisecond))
 		c.everDone = true
 	}
+	if m.v4.IsValid() {
+		c.setAddrs(m.v4, m.v6)
+	}
 	c.sendKeepalive(sess) // confirms the session on the server right away
+}
+
+// deviceID is the same on every run of one machine (or for one -device name) and
+// never 0 (0 is a v2 client).
+func deviceID(name, key string) uint64 {
+	if name == "" {
+		b, _ := os.ReadFile("/etc/machine-id")
+		name = "machine:" + strings.TrimSpace(string(b))
+	}
+	h := sha256.Sum256([]byte("microtun device|" + key + "|" + name))
+	return binary.BigEndian.Uint64(h[:8]) | 1
+}
+
+// setAddrs moves the interface to the addresses the server gave this device: the
+// link's own address for the first device, another one for a second device.
+func (c *client) setAddrs(v4, v6 netip.Addr) {
+	tun := c.cfg.Tun
+	link, _ := netip.ParsePrefix(c.cfg.Address)
+	if v4 != c.addr4 {
+		p := netip.PrefixFrom(v4, link.Bits())
+		_ = run("ip", "-4", "addr", "flush", "dev", tun)
+		if err := run("ip", "addr", "replace", p.String(), "dev", tun); err != nil {
+			log.Printf("address %s: %v", v4, err)
+			return
+		}
+		// the tunnel network of the link stays reachable from the new address
+		if !p.Masked().Contains(link.Addr()) {
+			_ = run("ip", "route", "replace", link.Masked().String(), "dev", tun, "src", v4.String())
+		}
+		if c.cfg.RouteAll {
+			for _, r := range []string{"0.0.0.0/1", "128.0.0.0/1"} {
+				_ = run("ip", "route", "replace", r, "dev", tun)
+			}
+		}
+		c.addr4 = v4
+		log.Printf("tunnel address %s (given by the server for this device)", p)
+	}
+	if v6.IsValid() && v6 != c.addr6 {
+		if c.addr6.IsValid() {
+			_ = run("ip", "-6", "addr", "del", netip.PrefixFrom(c.addr6, 64).String(), "dev", tun)
+		}
+		if err := run("ip", "-6", "addr", "replace", netip.PrefixFrom(v6, 64).String(), "dev", tun, "nodad"); err != nil {
+			log.Printf("IPv6 %s: %v", v6, err)
+			return
+		}
+		if c.cfg.RouteAll {
+			for _, r := range []string{"::/1", "8000::/1"} {
+				_ = run("ip", "-6", "route", "replace", r, "dev", tun)
+			}
+		}
+		c.addr6 = v6
+		log.Printf("tunnel IPv6 %s", v6)
+	}
 }
 
 func (c *client) sendKeepalive(sess *session) {

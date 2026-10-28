@@ -56,6 +56,9 @@ type clientConfig struct {
 	Keepalive duration `json:"keepalive"` // 0 = off; also drives dead-server detection
 	RouteAll  bool     `json:"route_all"` // send all IPv4 traffic through the tunnel
 	DNS       string   `json:"dns"`       // set via resolvectl when route_all is on
+	// this machine's name for the server ("" = made from /etc/machine-id and the key, so
+	// a restart is the same device); two clients of one user on one machine need two names
+	Device string `json:"device"`
 }
 
 func loadJSON(path string, v any) error {

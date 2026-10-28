@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const version = "2.0.0"
+const version = "2.1.0"
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `microtun %s
@@ -42,6 +42,7 @@ func main() {
 		path := fs.String("c", os.Args[1]+".json", "config file")
 		link := fs.String("url", "", "client: an mtun:// link from the Kanki panel instead of -c")
 		routeAll := fs.Bool("route-all", true, "client with -url: send all IPv4 traffic through the tunnel")
+		device := fs.String("device", "", "client with -url: a name for this device (default: from /etc/machine-id)")
 		_ = fs.Parse(os.Args[2:])
 		if *link != "" {
 			cfg, err := parseURL(*link)
@@ -49,6 +50,7 @@ func main() {
 				log.Fatal(err)
 			}
 			cfg.RouteAll = *routeAll
+			cfg.Device = *device
 			runClient(cfg)
 			return
 		}

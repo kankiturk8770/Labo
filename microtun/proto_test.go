@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"net/netip"
 	"testing"
 	"time"
 )
@@ -169,5 +170,56 @@ func TestParseURL(t *testing.T) {
 	c, err := parseURL("mtun://" + k + "@de.example.com:4200?obfs=" + k + "&ip=10.77.0.2/16&mtu=1400&burst=200&delay=3#Germany%20%C2%B7%20microtun")
 	if err != nil || c.Server != "de.example.com:4200" || c.Key != k || c.ObfsKey != k || c.Address != "10.77.0.2/16" || c.MTU != 1400 || c.BurstMax != 200 || c.BurstDelay != duration(3*time.Millisecond) {
 		t.Fatalf("%+v %v", c, err)
+	}
+}
+
+func TestDeviceIDAndAddresses(t *testing.T) {
+	obfs, _ := newBlock(testObfs(t))
+	ck, sk := testKeys(t)
+	ce, _ := newEphemeral()
+	init := buildInit(obfs, ck, initMsg{eph: ce.PublicKey().Bytes(), ts: 3, idx: 7, dev: 0x1122334455667788})
+	mask(obfs, init)
+	m, ok := parseInit(sk, init)
+	if !ok || m.dev != 0x1122334455667788 {
+		t.Fatalf("device id: %x %v", m.dev, ok)
+	}
+	// room for the addresses in the response, which is never larger than the init
+	if len(init) < hdrLen+respBody+extAddrLen+tagLen {
+		t.Fatalf("init of %d bytes leaves no room for the addresses", len(init))
+	}
+	// a v2 init has no device id
+	v2 := buildInit(obfs, ck, initMsg{eph: ce.PublicKey().Bytes(), ts: 4, idx: 7})
+	mask(obfs, v2)
+	if m, _ := parseInit(sk, v2); m.dev != 0 {
+		t.Fatal("v2 padding read as a device id")
+	}
+	// a response as the panel's server makes it: "mtA1" + IPv4 + flags + IPv6
+	se, _ := newEphemeral()
+	body := append([]byte{}, se.PublicKey().Bytes()...)
+	body = append(body, 0, 0, 0, 9, 0, 0, 0, 7)
+	body = append(body, "mtA1"...)
+	body = append(body, 10, 80, 3, 4, 1)
+	v6 := netip.MustParseAddr("fd79:4d54::a50:304").As16()
+	body = append(body, v6[:]...)
+	resp := sealHandshake(obfs, sk.resp, body, ce.PublicKey().Bytes(), 0)
+	mask(obfs, resp)
+	r, ok := parseResp(ck, resp, ce.PublicKey().Bytes())
+	if !ok || r.v4 != netip.MustParseAddr("10.80.3.4") || r.v6 != netip.MustParseAddr("fd79:4d54::a50:304") {
+		t.Fatalf("addresses: %v %v %v", r.v4, r.v6, ok)
+	}
+}
+
+func TestClockGoingBack(t *testing.T) {
+	now := uint64(time.Now().UnixNano())
+	if !tsOK(now-uint64(time.Minute), now, now) {
+		t.Fatal("an older timestamp near our clock is refused")
+	}
+	if tsOK(now-uint64(10*time.Minute), now-uint64(5*time.Minute), now) {
+		t.Fatal("an old timestamp far from our clock is taken")
+	}
+	p := &peer{}
+	e := make([]byte, 32)
+	if p.seenBefore(e) || !p.seenBefore(e) {
+		t.Fatal("an ephemeral key is taken once")
 	}
 }

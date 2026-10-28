@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,11 @@ import (
 // QUIC-style: mask = AES(obfsKey, first 16 bytes of ciphertext), so on the wire
 // nothing is static or counting up. idx 0 marks a handshake packet; in that case
 // ctr is 8 random bytes.
+//
+// v2.1 lives in the random padding of the handshakes, so v2 peers ignore it:
+// the init may carry "mtD1" + a device id (each device of a user is a peer of
+// its own on the Kanki panel's server, with its own address), and the response
+// then carries "mtA1" + the device's IPv4 + flags + its IPv6 (flag bit 0).
 const (
 	hdrLen   = 12
 	tagLen   = 16
@@ -33,6 +39,11 @@ const (
 	initBody = 32 + 8 + 4 // client ephemeral | timestamp | client idx
 	respBody = 32 + 4 + 4 // server ephemeral | server idx | client idx
 	maxPad   = 64
+
+	extDevLen  = 4 + 8          // "mtD1" | device id
+	extAddrLen = 4 + 4 + 1 + 16 // "mtA1" | IPv4 | flags | IPv6
+	// an init with a device id is at least this long, so the response has room for the addresses
+	minInitPad = respBody + extAddrLen - (initBody + extDevLen)
 
 	maxCounter = 1 << 60
 )
@@ -130,14 +141,21 @@ type initMsg struct {
 	eph []byte
 	ts  uint64
 	idx uint32
+	dev uint64 // 0 = none (a v2 client)
 }
 
 func buildInit(obfs cipher.Block, k *pskKeys, m initMsg) []byte {
-	body := make([]byte, initBody)
+	body := make([]byte, initBody, initBody+extDevLen)
 	copy(body, m.eph)
 	binary.BigEndian.PutUint64(body[32:], m.ts)
 	binary.BigEndian.PutUint32(body[40:], m.idx)
-	return sealHandshake(obfs, k.init, body, nil, randPad(maxPad))
+	pad := randPad(maxPad)
+	if m.dev != 0 {
+		body = append(body, "mtD1"...)
+		body = binary.BigEndian.AppendUint64(body, m.dev)
+		pad = minInitPad + randPad(maxPad-minInitPad)
+	}
+	return sealHandshake(obfs, k.init, body, nil, pad)
 }
 
 func parseInit(k *pskKeys, pkt []byte) (initMsg, bool) {
@@ -145,17 +163,23 @@ func parseInit(k *pskKeys, pkt []byte) (initMsg, bool) {
 	if err != nil {
 		return initMsg{}, false
 	}
-	return initMsg{
+	m := initMsg{
 		eph: pt[:32],
 		ts:  binary.BigEndian.Uint64(pt[32:]),
 		idx: binary.BigEndian.Uint32(pt[40:]),
-	}, true
+	}
+	if ext := pt[initBody:]; len(ext) >= extDevLen && string(ext[:4]) == "mtD1" {
+		m.dev = binary.BigEndian.Uint64(ext[4:])
+	}
+	return m, true
 }
 
 type respMsg struct {
 	eph       []byte
 	serverIdx uint32
 	clientIdx uint32
+	// v2.1: the device's tunnel addresses (invalid = not given)
+	v4, v6 netip.Addr
 }
 
 // buildResp never makes a response larger than the init it answers, so the
@@ -174,11 +198,18 @@ func parseResp(k *pskKeys, pkt, clientEph []byte) (respMsg, bool) {
 	if err != nil {
 		return respMsg{}, false
 	}
-	return respMsg{
+	m := respMsg{
 		eph:       pt[:32],
 		serverIdx: binary.BigEndian.Uint32(pt[32:]),
 		clientIdx: binary.BigEndian.Uint32(pt[36:]),
-	}, true
+	}
+	if ext := pt[respBody:]; len(ext) >= extAddrLen && string(ext[:4]) == "mtA1" {
+		m.v4 = netip.AddrFrom4([4]byte(ext[4:8]))
+		if ext[8]&1 != 0 {
+			m.v6 = netip.AddrFrom16([16]byte(ext[9:25]))
+		}
+	}
+	return m, true
 }
 
 // deriveKeys mixes the ephemeral X25519 secret with the PSK and binds both

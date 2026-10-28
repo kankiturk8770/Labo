@@ -21,7 +21,8 @@ type peer struct {
 	current  atomic.Pointer[session] // used for sending
 
 	mu      sync.Mutex // guards the fields below and session table changes
-	lastTS  uint64     // newest accepted init timestamp: older inits are replays
+	lastTS  uint64     // newest accepted init timestamp: older inits are replays,
+	seen    []seenEph  // unless near our clock and new (a client whose clock went back)
 	prev    *session
 	pending *session // answered but not yet confirmed by a data packet
 }
@@ -211,7 +212,7 @@ func (s *server) handleInit(pkt []byte, from netip.AddrPort) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if m.ts <= p.lastTS {
+	if !tsOK(m.ts, p.lastTS, uint64(time.Now().UnixNano())) || p.seenBefore(m.eph) {
 		return // replayed or stale init
 	}
 	eph, err := newEphemeral()
@@ -222,7 +223,7 @@ func (s *server) handleInit(pkt []byte, from netip.AddrPort) {
 	if err != nil {
 		return
 	}
-	p.lastTS = m.ts
+	p.lastTS = max(p.lastTS, m.ts)
 
 	s.mu.Lock()
 	idx := randIdx()
@@ -295,4 +296,41 @@ func (s *server) janitor() {
 			p.mu.Unlock()
 		}
 	}
+}
+
+// fresh is how far an init timestamp may be from our clock and still be taken
+// when it is not newer than the last one; seenFor is how long an init's
+// ephemeral key is remembered (longer than fresh both ways).
+const (
+	fresh   = 120 * time.Second
+	seenFor = 300 * time.Second
+)
+
+type seenEph struct {
+	eph [32]byte
+	at  time.Time
+}
+
+// tsOK: newer than the peer's last init, or (its clock went back) near ours.
+func tsOK(ts, last, now uint64) bool {
+	d := int64(ts - now)
+	return ts > last || (d <= int64(fresh) && d >= -int64(fresh))
+}
+
+// seenBefore records eph and reports whether it came before (a replayed init).
+// The caller holds p.mu.
+func (p *peer) seenBefore(eph []byte) bool {
+	now := time.Now()
+	for len(p.seen) > 0 && (now.Sub(p.seen[0].at) > seenFor || len(p.seen) > 256) {
+		p.seen = p.seen[1:]
+	}
+	var e [32]byte
+	copy(e[:], eph)
+	for _, x := range p.seen {
+		if x.eph == e {
+			return true
+		}
+	}
+	p.seen = append(p.seen, seenEph{e, now})
+	return false
 }
