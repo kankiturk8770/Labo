@@ -15,6 +15,16 @@ Anti-censorship tunnel components.
   ```
   Panel: `http://SERVER_IP:8443`
 
+- **[`microtun/`](microtun/)** — a light TUN-over-UDP VPN for games: 28 bytes
+  per packet (WireGuard 32), X25519+PSK handshake with rekeying, hidden header,
+  multi-user, and duplicate sending of small packets against loss. Linux server
+  and client; see [`microtun/README.md`](microtun/README.md).
+
+  ```bash
+  git clone https://github.com/kankiturk8770/Labo.git && cd Labo/microtun
+  sudo bash install.sh server SERVER_PUBLIC_IP 51820 1
+  ```
+
 - **[`server/`](server/)** — the earlier edge-gateway (HMAC-authenticated,
   decoy-routing reverse proxy) + Persian RTL panel. Kept for reference.
 

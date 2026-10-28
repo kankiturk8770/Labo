@@ -1,0 +1,53 @@
+name: Build microtun
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "microtun/**"
+      - ".github/workflows/microtun.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: microtun
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Test
+        run: go vet ./... && go test ./...
+
+      - name: Build static Linux binaries
+        run: |
+          mkdir -p ../dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags='-s -w' -o ../dist/microtun-linux-$arch .
+          done
+          ls -la ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: microtun
+          path: dist/*
+
+      - name: Publish rolling release (stable download link)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: microtun-latest
+          name: "microtun (latest build)"
+          body: |
+            Static Linux builds of microtun from `${{ github.ref_name }}`.
+            Commit: ${{ github.sha }}
+          files: dist/*
+          make_latest: false
